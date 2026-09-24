@@ -1,77 +1,77 @@
-# Observability
+# 可观测性
 
-## Overview
+## 概览
 
 ```mermaid
 graph LR
-    App["FastAPI App"]
+    App["FastAPI 应用"]
 
-    App -->|"LLM traces\n(every call)"| Langfuse
-    App -->|"HTTP metrics\n(/metrics)"| Prometheus
+    App -->|"LLM 跟踪\n（每次调用）"| Langfuse
+    App -->|"HTTP 指标\n（/metrics）"| Prometheus
     Prometheus --> Grafana
-    App -->|"structured logs\n(stdout)"| Logs["Log aggregator\n(or stdout)"]
-    App -->|"slow request profiles\n(DEBUG only)"| Profiles["JSON files\n(PROFILING_DIR)"]
+    App -->|"结构化日志\n（标准输出）"| Logs["日志聚合器\n（或标准输出）"]
+    App -->|"慢请求性能分析\n（仅 DEBUG）"| Profiles["JSON 文件\n（PROFILING_DIR）"]
 ```
 
 ---
 
-## Langfuse — LLM tracing
+## Langfuse — LLM 跟踪
 
-Every LLM call is traced via the LangChain `CallbackHandler`. Traces include:
+每次 LLM 调用都会通过 LangChain `CallbackHandler` 进行跟踪.跟踪记录包括：
 
-- Input messages and output
-- Token usage and cost
-- Latency per call and per session
-- Model name, temperature, and other parameters
+- 输入消息和输出
+- 令牌使用量和费用
+- 每次调用和每个会话的延迟
+- 模型名称、temperature 和其他参数
 
-**Setup:**
+**配置：**
 
 ```bash
 LANGFUSE_TRACING_ENABLED=true
 LANGFUSE_PUBLIC_KEY=pk-...
 LANGFUSE_SECRET_KEY=sk-...
-LANGFUSE_HOST=https://cloud.langfuse.com   # or your self-hosted URL
+LANGFUSE_HOST=https://cloud.langfuse.com   # 或你的自托管地址
 ```
 
-**Disable for local dev:**
+**本地开发时禁用：**
 
 ```bash
 LANGFUSE_TRACING_ENABLED=false
 ```
 
-Traces are also used as the data source for the [evaluation framework](evaluation.md).
+跟踪记录同时作为[评估框架](evaluation.md)的数据源.
 
 ---
 
-## Structured logging
+## 结构化日志
 
-All logs use [structlog](https://www.structlog.org/) in a consistent format:
+所有日志都使用 [structlog](https://www.structlog.org/) 以统一格式输出：
 
-- **Development**: coloured console output
-- **Production**: JSON (pipe to your log aggregator)
+- **开发环境：** 彩色控制台输出
+- **生产环境：** JSON 格式（可通过管道传递给日志聚合器）
 
-Every log line automatically carries `request_id`, `session_id`, and `user_id` when available — bound by `LoggingContextMiddleware`.
+每条日志在可用时都会自动携带 `request_id`、`session_id` 和 `user_id`，这些字段由 `LoggingContextMiddleware` 绑定.
 
-### Log format conventions
+### 日志格式约定
 
 ```python
-# Good
+# 正确示例
 logger.info("chat_request_received", session_id=session.id, message_count=5)
 
-# Never
-logger.info(f"chat request received for {session.id}")  # no f-strings
-logger.error("something failed", error=str(e))          # use logger.exception for exceptions
+# 禁止示例
+logger.info(f"chat request received for {session.id}")  # 不使用 f-string
+logger.error("something failed", error=str(e))          # 异常中使用 logger.exception
 ```
 
-Rules:
+规则：
 
-- Event names are `lowercase_with_underscores`
-- Variables are keyword arguments, never interpolated into the event string
-- Use `logger.exception()` (not `.error()`) when inside an `except` block — preserves the full traceback
+- 事件名称使用 `lowercase_with_underscores` 格式
+- 变量作为关键字参数传入，不能插入事件字符串
+- 在 `except` 代码块中使用 `logger.exception()`（不要使用 `.error()`），以保留完整堆栈信息
 
-### Log levels by environment
+### 按环境划分的日志级别
 
-| Environment | Level |
+| 环境 | 级别 |
 | --- | --- |
 | development | DEBUG |
 | staging | INFO |
@@ -79,27 +79,27 @@ Rules:
 
 ---
 
-## Prometheus metrics
+## Prometheus 指标
 
-Metrics are exposed at `GET /metrics` and scraped by Prometheus.
+指标通过 `GET /metrics` 暴露，并由 Prometheus 抓取.
 
-| Metric | Type | Description |
+| 指标 | 类型 | 说明 |
 | --- | --- | --- |
-| `http_requests_total` | Counter | Request count by method, endpoint, status |
-| `http_request_duration_seconds` | Histogram | Request latency by method, endpoint |
-| `llm_inference_duration_seconds` | Histogram | LLM call latency by model |
-| `llm_stream_duration_seconds` | Histogram | Streaming call latency by model |
-| `db_connections` | Gauge | Active database connections |
+| `http_requests_total` | Counter | 按方法、接口和状态统计请求数量 |
+| `http_request_duration_seconds` | Histogram | 按方法和接口统计请求延迟 |
+| `llm_inference_duration_seconds` | Histogram | 按模型统计 LLM 调用延迟 |
+| `llm_stream_duration_seconds` | Histogram | 按模型统计流式调用延迟 |
+| `db_connections` | Gauge | 活跃数据库连接数 |
 
-Grafana dashboards are pre-configured in `grafana/`. Start the full stack with `make stack-up ENV=development` to access them at [http://localhost:3000](http://localhost:3000) (admin/admin).
+Grafana 仪表盘已在 `grafana/` 中预配置.执行 `make stack-up ENV=development` 后，可通过 [http://localhost:3000](http://localhost:3000) 访问，凭据为 `admin/admin`.
 
 ---
 
-## Request profiling (debug only)
+## 请求性能分析（仅调试模式）
 
-When `DEBUG=true`, `ProfilingMiddleware` profiles every request using [pyinstrument](https://github.com/joerick/pyinstrument). When a request exceeds `PROFILING_THRESHOLD_SECONDS`, a JSON report is saved to `PROFILING_DIR`.
+当 `DEBUG=true` 时，`ProfilingMiddleware` 会使用 [pyinstrument](https://github.com/joerick/pyinstrument) 分析每个请求.当请求耗时超过 `PROFILING_THRESHOLD_SECONDS` 时，会将 JSON 报告保存到 `PROFILING_DIR`.
 
-Each report file is named `{request_id}.json` and contains:
+每个报告文件命名为 `{request_id}.json`，内容包括：
 
 ```json
 {
@@ -114,18 +114,18 @@ Each report file is named `{request_id}.json` and contains:
 }
 ```
 
-Set `PROFILING_THRESHOLD_SECONDS=0` to profile every request.
+设置 `PROFILING_THRESHOLD_SECONDS=0` 可分析每个请求.
 
-The `request_id` in the filename matches the `X-Request-ID` response header, so you can correlate profiles with specific log lines.
+文件名中的 `request_id` 与响应头 `X-Request-ID` 一致，因此可以将性能分析报告与具体日志关联起来.
 
 ---
 
-## Request ID propagation
+## 请求 ID 传递
 
-Every request gets a unique `X-Request-ID` header via [`asgi-correlation-id`](https://github.com/snok/asgi-correlation-id). This ID is:
+每个请求都会通过 [`asgi-correlation-id`](https://github.com/snok/asgi-correlation-id) 获得唯一的 `X-Request-ID` 请求头.该 ID：
 
-- Returned in the response headers
-- Bound to every log line for that request
-- Used as the filename for profile reports
+- 会在响应头中返回
+- 会绑定到该请求的每条日志
+- 会作为性能分析报告的文件名
 
-Use the `X-Request-ID` from a response to grep logs, find profiles, and look up Langfuse traces for that exact request.
+可以使用响应中的 `X-Request-ID` 搜索日志、查找性能分析报告，并查询该请求对应的 Langfuse 跟踪记录.

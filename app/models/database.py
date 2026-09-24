@@ -1,4 +1,4 @@
-"""Database models for the application."""
+"""应用数据库模型."""
 
 from app.models.thread import Thread
 

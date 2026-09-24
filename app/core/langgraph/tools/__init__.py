@@ -1,8 +1,7 @@
-"""LangGraph tools for enhanced language model capabilities.
+"""用于增强语言模型能力的 LangGraph 工具.
 
-This package contains custom tools that can be used with LangGraph to extend
-the capabilities of language models. Currently includes tools for web search
-and other external integrations.
+本模块包含可供 LangGraph 使用的自定义工具，用于扩展语言模型能力，
+目前包括网页搜索和其他外部集成工具.
 """
 
 from langchain_core.tools.base import BaseTool

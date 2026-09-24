@@ -1,7 +1,6 @@
-"""Cache service with optional Redis/Valkey backend.
+"""提供可选 Redis/Valkey 后端的缓存服务.
 
-If VALKEY_HOST is configured, uses Redis client to connect to Valkey for distributed caching.
-Otherwise, falls back to a simple in-memory TTL cache.
+配置 VALKEY_HOST 后，使用 Redis 客户端连接 Valkey 实现分布式缓存；否则回退到简单的内存 TTL 缓存.
 """
 
 import hashlib
@@ -16,7 +15,7 @@ from typing import (
 from app.core.config import settings
 from app.core.logging import logger
 
-# Try to import redis — it's an optional dependency
+# 尝试导入 redis；该依赖是可选的
 if TYPE_CHECKING:
     from redis.asyncio import Redis  # pyright: ignore[reportMissingImports]
 
@@ -33,29 +32,29 @@ else:
 
 
 class InMemoryCacheService:
-    """Simple in-memory TTL cache fallback when Valkey is not available."""
+    """Valkey 不可用时使用的简单内存 TTL 缓存."""
 
     def __init__(self, default_ttl: int = 60):
-        """Initialize in-memory cache.
+        """初始化内存缓存.
 
-        Args:
-            default_ttl: Default time-to-live in seconds for cache entries.
+        参数：
+            default_ttl: 缓存条目的默认存活时间，单位为秒.
         """
         self._cache: dict[str, tuple[float, str]] = {}
         self._default_ttl = default_ttl
 
     async def initialize(self) -> None:
-        """No-op for in-memory cache."""
+        """内存缓存无需执行初始化操作."""
         logger.info("cache_initialized", backend="in_memory", ttl=self._default_ttl)
 
     async def get(self, key: str) -> Optional[str]:
-        """Get a value from cache.
+        """从缓存中获取值.
 
-        Args:
-            key: The cache key.
+        参数：
+            key: 缓存键.
 
-        Returns:
-            The cached value, or None if not found or expired.
+        返回：
+            缓存值；不存在或已过期时返回 None.
         """
         entry = self._cache.get(key)
         if entry is None:
@@ -67,43 +66,43 @@ class InMemoryCacheService:
         return value
 
     async def set(self, key: str, value: str, ttl: Optional[int] = None) -> None:
-        """Set a value in cache with TTL.
+        """将值按 TTL 写入缓存.
 
-        Args:
-            key: The cache key.
-            value: The value to cache.
-            ttl: Time-to-live in seconds. Uses default if not specified.
+        参数：
+            key: 缓存键.
+            value: 要缓存的值.
+            ttl: 存活时间，单位为秒；未指定时使用默认值.
         """
         expires_at = time.monotonic() + (ttl or self._default_ttl)
         self._cache[key] = (expires_at, value)
 
     async def delete(self, key: str) -> None:
-        """Delete a value from cache.
+        """删除缓存中的值.
 
-        Args:
-            key: The cache key.
+        参数：
+            key: 缓存键.
         """
         self._cache.pop(key, None)
 
     async def close(self) -> None:
-        """Clear the in-memory cache."""
+        """清空内存缓存."""
         self._cache.clear()
 
 
 class ValkeyCacheService:
-    """Redis/Valkey cache backend for distributed caching."""
+    """用于分布式缓存的 Redis/Valkey 缓存后端."""
 
     def __init__(self, default_ttl: int = 60):
-        """Initialize cache service with Redis client.
+        """使用 Redis 客户端初始化缓存服务.
 
-        Args:
-            default_ttl: Default time-to-live in seconds for cache entries.
+        参数：
+            default_ttl: 缓存条目的默认存活时间，单位为秒.
         """
         self._client: Optional[Redis] = None
         self._default_ttl = default_ttl
 
     async def initialize(self) -> None:
-        """Connect to Redis/Valkey server."""
+        """连接 Redis/Valkey 服务."""
         client = Redis(
             host=settings.VALKEY_HOST,
             port=settings.VALKEY_PORT,
@@ -123,13 +122,13 @@ class ValkeyCacheService:
         )
 
     async def get(self, key: str) -> Optional[str]:
-        """Get a value from Valkey.
+        """从 Valkey 获取值.
 
-        Args:
-            key: The cache key.
+        参数：
+            key: 缓存键.
 
-        Returns:
-            The cached value, or None if not found.
+        返回：
+            缓存值；不存在时返回 None.
         """
         if not self._client:
             return None
@@ -140,12 +139,12 @@ class ValkeyCacheService:
             return None
 
     async def set(self, key: str, value: str, ttl: Optional[int] = None) -> None:
-        """Set a value in Valkey with TTL.
+        """将值按 TTL 写入 Valkey.
 
-        Args:
-            key: The cache key.
-            value: The value to cache.
-            ttl: Time-to-live in seconds. Uses default if not specified.
+        参数：
+            key: 缓存键.
+            value: 要缓存的值.
+            ttl: 存活时间，单位为秒；未指定时使用默认值.
         """
         if not self._client:
             return
@@ -155,10 +154,10 @@ class ValkeyCacheService:
             logger.warning("cache_set_failed", key=key, error=str(e))
 
     async def delete(self, key: str) -> None:
-        """Delete a value from Valkey.
+        """删除 Valkey 中的值.
 
-        Args:
-            key: The cache key.
+        参数：
+            key: 缓存键.
         """
         if not self._client:
             return
@@ -168,17 +167,17 @@ class ValkeyCacheService:
             logger.warning("cache_delete_failed", key=key, error=str(e))
 
     async def close(self) -> None:
-        """Close the Valkey connection."""
+        """关闭 Valkey 连接."""
         if self._client:
             await self._client.aclose()
             logger.info("cache_connection_closed")
 
 
 def _create_cache_service() -> InMemoryCacheService | ValkeyCacheService:
-    """Create the appropriate cache service based on configuration.
+    """根据配置创建合适的缓存服务.
 
-    Returns:
-        A cache service instance (Redis if configured, otherwise in-memory).
+    返回：
+        缓存服务实例；配置 Redis 时返回 Redis 服务，否则返回内存服务.
     """
     ttl = settings.CACHE_TTL_SECONDS
 
@@ -195,19 +194,19 @@ def _create_cache_service() -> InMemoryCacheService | ValkeyCacheService:
 
 
 def cache_key(prefix: str, *parts: str) -> str:
-    """Build a cache key with a prefix and hashed parts.
+    """使用前缀和哈希后的组成部分构建缓存键.
 
-    Args:
-        prefix: The cache key prefix (e.g., "memory").
-        *parts: Additional parts to include in the key.
+    参数：
+        prefix: 缓存键前缀，例如 ``memory``.
+        *parts: 要加入缓存键的其他组成部分.
 
-    Returns:
-        A deterministic cache key string.
+    返回：
+        可确定的缓存键字符串.
     """
     raw = ":".join(parts)
     hashed = hashlib.sha256(raw.encode()).hexdigest()[:16]
     return f"{prefix}:{hashed}"
 
 
-# Global cache service singleton — initialized lazily in lifespan
+# 全局缓存服务单例；在 lifespan 中延迟初始化
 cache_service = _create_cache_service()

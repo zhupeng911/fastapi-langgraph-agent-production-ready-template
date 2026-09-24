@@ -1,8 +1,7 @@
-"""DuckDuckGo search tool for LangGraph.
+"""LangGraph 的 DuckDuckGo 搜索工具.
 
-This module provides a DuckDuckGo search tool that can be used with LangGraph
-to perform web searches. It returns up to 10 search results and handles errors
-gracefully.
+本模块提供可与 LangGraph 配合使用的 DuckDuckGo 搜索工具，最多返回 10 条搜索结果，
+并对错误进行兼容处理.
 """
 
 from langchain_community.tools import DuckDuckGoSearchResults

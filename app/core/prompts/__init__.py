@@ -1,4 +1,4 @@
-"""This file contains the prompts for the agent."""
+"""Agent 使用的提示词."""
 
 import os
 from datetime import datetime
@@ -8,7 +8,7 @@ from app.core.config import settings
 
 _PROMPTS_DIR = os.path.dirname(__file__)
 
-# Read templates once at module load — no file I/O per request
+# 模块加载时只读取一次模板，避免每次请求执行文件 I/O
 with open(os.path.join(_PROMPTS_DIR, "system.md"), "r") as _f:
     _SYSTEM_PROMPT_TEMPLATE = _f.read()
 
@@ -17,7 +17,7 @@ with open(os.path.join(_PROMPTS_DIR, "session_title.md"), "r") as _f:
 
 
 def load_system_prompt(username: Optional[str] = None, **kwargs):
-    """Load the system prompt from the cached template."""
+    """从缓存的模板中加载系统提示词."""
     user_context = f"# User\nYou are talking to {username}.\n" if username else ""
     return _SYSTEM_PROMPT_TEMPLATE.format(
         agent_name=settings.PROJECT_NAME + " Agent",

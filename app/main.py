@@ -1,4 +1,4 @@
-"""This file contains the main application entry point."""
+"""应用主入口."""
 
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -33,14 +33,14 @@ from app.core.observability import langfuse_init
 from app.services.database import database_service
 from app.services.memory import memory_service
 
-# Load environment variables
+# 加载环境变量
 load_dotenv()
 langfuse_init()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Handle application startup and shutdown events."""
+    """处理应用启动和关闭事件.（如初始化数据库连接池、加载 AI 模型、释放 Redis 客户端）."""
     logger.info(
         "application_startup",
         project_name=settings.PROJECT_NAME,
@@ -48,22 +48,20 @@ async def lifespan(app: FastAPI):
         api_prefix=settings.API_V1_STR,
     )
 
-    # Initialize cache service (connects to Valkey if configured)
+    # 初始化缓存服务；如果配置了 Valkey，则建立对应连接
     try:
         await cache_service.initialize()
     except Exception as e:
         logger.exception("cache_initialization_failed", error=str(e))
 
-    # Pre-warm the LangGraph agent: create graph + connection pool at startup
-    # to avoid cold-start latency on the first request
+    # 预热 LangGraph Agent，在启动时创建图和连接池，避免首次请求产生冷启动延迟
     try:
         await agent.create_graph()
         logger.info("graph_pre_warmed")
     except Exception as e:
         logger.exception("graph_pre_warm_failed", error=str(e))
 
-    # Pre-warm mem0 AsyncMemory: initializes pgvector connection and schema check
-    # so the first search() cache miss or add() doesn't pay the ~130ms cold-init cost
+    # 预热 mem0 AsyncMemory，初始化 pgvector 连接并检查数据表结构，避免首次 search() 缓存未命中或 add() 时产生初始化延迟
     try:
         await memory_service.initialize()
     except Exception as e:
@@ -71,7 +69,7 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Cleanup on shutdown
+    # 应用关闭时释放资源
     await cache_service.close()
     if agent._connection_pool:
         await agent._connection_pool.close()
@@ -79,6 +77,7 @@ async def lifespan(app: FastAPI):
     logger.info("application_shutdown")
 
 
+# 创建FastAPI应用实例，指定lifespan即可
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
@@ -87,40 +86,31 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Set up Prometheus metrics
+# 配置 Prometheus 监控指标
 setup_metrics(app)
 
-# Add logging context middleware (must be added before other middleware to capture context)
+# 添加日志上下文中间件，确保在其他中间件之前捕获请求上下文
 app.add_middleware(LoggingContextMiddleware)
 
-# Add custom metrics middleware
+# 添加自定义指标中间件
 app.add_middleware(MetricsMiddleware)
 
-# Add profiling middleware (DEBUG only — saves HTML to /tmp on slow requests)
+# 仅在 DEBUG 模式下添加性能分析中间件；慢请求的分析结果会保存到 /tmp
 if settings.DEBUG:
     app.add_middleware(ProfilingMiddleware)
 
-# Add correlation ID middleware — must be outermost so request_id is set before all others
+# 添加请求关联 ID 中间件，必须位于最外层，以便在其他中间件执行前生成 request_id
 app.add_middleware(CorrelationIdMiddleware)
 
-# Set up rate limiter exception handler
+# 配置限流异常处理器
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # pyright: ignore[reportArgumentType]
 
 
-# Add validation exception handler
+# 配置请求参数校验异常处理器
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    """Handle validation errors from request data.
-
-    Args:
-        request: The request that caused the validation error
-        exc: The validation error
-
-    Returns:
-        JSONResponse: A formatted error response
-    """
-    # Log the validation error
+    """处理请求数据校验异常."""
     logger.error(
         "validation_error",
         client_host=request.client.host if request.client else "unknown",
@@ -128,7 +118,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         errors=str(exc.errors()),
     )
 
-    # Format the errors to be more user-friendly
+    # 将错误格式化为更易读的结构
     formatted_errors = []
     for error in exc.errors():
         loc = " -> ".join([str(loc_part) for loc_part in error["loc"] if loc_part != "body"])
@@ -140,7 +130,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
 
-# Set up CORS middleware
+# 配置 CORS 跨域中间件
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
@@ -149,14 +139,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include API router
+# 注册 API 路由，实际注册包括：
+# 例如：/api/v1/auth/...
+# 例如：/api/v1/chatbot/...
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
 
 @app.get("/")
 @limiter.limit(settings.RATE_LIMIT_ENDPOINTS["root"][0])
 async def root(request: Request):
-    """Root endpoint returning basic API information."""
+    """返回基础 API 信息."""
     logger.info("root_endpoint_called")
     return {
         "name": settings.PROJECT_NAME,
@@ -171,15 +163,10 @@ async def root(request: Request):
 @app.get("/health")
 @limiter.limit(settings.RATE_LIMIT_ENDPOINTS["health"][0])
 async def health_check(request: Request) -> JSONResponse:
-    """Health check endpoint with environment-specific information.
-
-    Returns:
-        JSONResponse: Health status payload, with HTTP 503 when the
-        database is unreachable so load balancers can drop the instance.
-    """
+    """检查应用和数据库的健康状态."""
     logger.info("health_check_called")
 
-    # Check database connectivity
+    # 检查数据库连接状态
     db_healthy = await database_service.health_check()
 
     response = {
@@ -190,7 +177,7 @@ async def health_check(request: Request) -> JSONResponse:
         "timestamp": datetime.now().isoformat(),
     }
 
-    # If DB is unhealthy, set the appropriate status code
+    # 数据库不健康时返回 503，便于负载均衡器摘除当前实例
     status_code = status.HTTP_200_OK if db_healthy else status.HTTP_503_SERVICE_UNAVAILABLE
 
     return JSONResponse(content=response, status_code=status_code)

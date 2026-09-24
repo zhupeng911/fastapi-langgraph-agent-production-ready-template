@@ -21,3 +21,4 @@ wheels/
 
 # Reports
 evals/reports/
+*.idea/

@@ -1,4 +1,4 @@
-"""Custom middleware for tracking metrics and other cross-cutting concerns."""
+"""用于跟踪指标和处理其他横切关注点的自定义中间件."""
 
 import json
 import time
@@ -47,18 +47,18 @@ else:
 
 
 class MetricsMiddleware(BaseHTTPMiddleware):
-    """Middleware for tracking HTTP request metrics."""
+    """用于跟踪 HTTP 请求指标的中间件."""
 
     @override
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        """Track metrics for each request.
+        """跟踪每个请求的指标.
 
-        Args:
-            request: The incoming request
-            call_next: The next middleware or route handler
+        参数：
+            request: 当前进入的请求.
+            call_next: 下一个中间件或路由处理器.
 
-        Returns:
-            Response: The response from the application
+        返回：
+            Response: 应用返回的响应.
         """
         start_time = time.time()
         status_code = 500
@@ -71,7 +71,7 @@ class MetricsMiddleware(BaseHTTPMiddleware):
         finally:
             duration = time.time() - start_time
 
-            # Record metrics
+            # 记录指标
             http_requests_total.labels(method=request.method, endpoint=request.url.path, status=status_code).inc()
 
             http_request_duration_seconds.labels(method=request.method, endpoint=request.url.path).observe(duration)
@@ -80,75 +80,73 @@ class MetricsMiddleware(BaseHTTPMiddleware):
 
 
 class LoggingContextMiddleware(BaseHTTPMiddleware):
-    """Middleware for adding user_id and session_id to logging context."""
+    """用于将 user_id 和 session_id 添加到日志上下文的中间件."""
 
     @override
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        """Extract user_id and session_id from authenticated requests and add to logging context.
+        """从已认证请求中提取 user_id 和 session_id，并添加到日志上下文.
 
-        Args:
-            request: The incoming request
-            call_next: The next middleware or route handler
+        参数：
+            request: 当前进入的请求.
+            call_next: 下一个中间件或路由处理器.
 
-        Returns:
-            Response: The response from the application
+        返回：
+            Response: 应用返回的响应.
         """
         try:
-            # Clear any existing context from previous requests
+            # 清理上一个请求可能遗留的上下文
             clear_context()
 
-            # Extract token from Authorization header
+            # 从 Authorization 请求头中提取令牌
             auth_header = request.headers.get("authorization")
             if auth_header and auth_header.startswith("Bearer "):
                 token = auth_header.split(" ")[1]
 
                 try:
-                    # Decode token to get session_id (stored in "sub" claim)
+                    # 解码令牌获取 session_id；session_id 存储在 "sub" 声明中
                     payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
                     session_id = payload.get("sub")
 
                     if session_id:
-                        # Bind session_id to logging context
+                        # 将 session_id 绑定到日志上下文
                         bind_context(session_id=session_id)
 
-                        # Try to get user_id from request state after authentication
-                        # This will be set by the dependency injection if the endpoint uses authentication
-                        # We'll check after the request is processed
+                        # 尝试在认证完成后从请求状态中获取 user_id.
+                        # 如果接口使用认证依赖注入，该值会被设置；请求处理完成后再进行检查.
 
                 except JWTError:
-                    # Token is invalid, but don't fail the request - let the auth dependency handle it
+                    # 令牌无效时不直接中断请求，交由认证依赖处理
                     pass
 
-            # Process the request
+            # 处理请求
             response = await call_next(request)
 
-            # After request processing, check if user info was added to request state
+            # 请求处理完成后，检查请求状态中是否已写入用户信息
             if hasattr(request.state, "user_id"):
                 bind_context(user_id=request.state.user_id)
 
             return response
 
         finally:
-            # Always clear context after request is complete to avoid leaking to other requests
+            # 请求完成后始终清理上下文，避免泄漏到其他请求
             clear_context()
 
 
 class ProfilingMiddleware(BaseHTTPMiddleware):
-    """Automatic per-request profiling middleware using pyinstrument.
+    """使用 pyinstrument 对每个请求自动进行性能分析的中间件.
 
-    Only active when DEBUG=true. Profiles every request and saves an HTML
-    flamegraph to PROFILING_DIR when the request exceeds
-    PROFILING_THRESHOLD_SECONDS. Files are named {request_id}.html so they
-    can be correlated with logs. /tmp is cleaned up automatically by the OS.
+    仅在 DEBUG=true 时启用.该中间件会分析每个请求，当请求耗时超过
+    PROFILING_THRESHOLD_SECONDS 时，将性能分析结果保存到 PROFILING_DIR.
+    文件名为 {request_id}.html，以便与日志关联；/tmp 目录由操作系统自动清理.
     """
 
     @override
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        """Profile every request; save enriched JSON if duration exceeds threshold."""
+        """分析每个请求，耗时超过阈值时保存详细 JSON 报告."""
         if not PYINSTRUMENT_AVAILABLE:
             return await call_next(request)
 
-        # Start all three profilers
+        # 启动三类性能分析器
         tracemalloc.start()
         cpu_start = time.process_time()
 
@@ -156,7 +154,7 @@ class ProfilingMiddleware(BaseHTTPMiddleware):
         with profiler:
             response = await call_next(request)
 
-        # Capture metrics immediately after the request
+        # 请求完成后立即采集指标
         cpu_ms = round((time.process_time() - cpu_start) * 1000, 2)
         mem_current_kb, mem_peak_kb = (v // 1024 for v in tracemalloc.get_traced_memory())
         snapshot = tracemalloc.take_snapshot()
@@ -172,7 +170,7 @@ class ProfilingMiddleware(BaseHTTPMiddleware):
             settings.PROFILING_DIR.mkdir(parents=True, exist_ok=True)
             filepath = settings.PROFILING_DIR / f"{raw_id}.json"
 
-            # Top 20 memory allocators — exclude profiler and stdlib noise
+            # 获取内存占用最多的前 20 个位置，排除性能分析器和标准库产生的噪声
             _excluded = ("tracemalloc", "pyinstrument", "<frozen", "logging/__init__")
             top_allocs = [
                 {

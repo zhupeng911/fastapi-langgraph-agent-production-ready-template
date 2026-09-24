@@ -1,4 +1,4 @@
-"""Base response schemas shared across all endpoints."""
+"""所有接口共用的基础响应 Schema."""
 
 from uuid import UUID, uuid4
 
@@ -7,16 +7,15 @@ from pydantic import BaseModel, Field
 
 
 def _get_request_id() -> UUID:
-    """Return the current request's correlation ID, or a fresh UUID as fallback."""
+    """返回当前请求的关联 ID；不存在时生成新的 UUID 作为兜底."""
     value = correlation_id.get()
     return UUID(value) if value else uuid4()
 
 
 class BaseResponse(BaseModel):
-    """Base response model that all endpoint responses inherit from.
+    """所有接口响应继承的基础响应模型.
 
-    request_id is auto-populated from the CorrelationIdMiddleware ContextVar —
-    no endpoint needs to pass it explicitly.
+    request_id 会从 CorrelationIdMiddleware 的 ContextVar 自动填充，接口无需显式传入.
     """
 
     request_id: UUID = Field(default_factory=_get_request_id, description="Unique identifier for this request")

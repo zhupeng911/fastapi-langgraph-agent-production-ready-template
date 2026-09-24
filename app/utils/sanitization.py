@@ -1,4 +1,4 @@
-"""This file contains the sanitization utilities for the application."""
+"""应用输入清理工具."""
 
 import html
 import re
@@ -10,43 +10,43 @@ from typing import (
 
 
 def sanitize_string(value: str) -> str:
-    """Sanitize a string to prevent XSS and other injection attacks.
+    """清理字符串，防止 XSS 和其他注入攻击.
 
-    Args:
-        value: The string to sanitize
+    参数：
+        value: 待清理的字符串.
 
-    Returns:
-        str: The sanitized string
+    返回：
+        str: 清理后的字符串.
     """
-    # Convert to string if not already
+    # 如果不是字符串则转换为字符串
     if not isinstance(value, str):
         value = str(value)
 
-    # HTML escape to prevent XSS
+    # 转义 HTML，防止 XSS
     value = html.escape(value)
 
-    # Remove any script tags that might have been escaped
+    # 移除可能已经被转义的 script 标签
     value = re.sub(r"&lt;script.*?&gt;.*?&lt;/script&gt;", "", value, flags=re.DOTALL)
 
-    # Remove null bytes
+    # 移除空字节
     value = value.replace("\0", "")
 
     return value
 
 
 def sanitize_email(email: str) -> str:
-    """Sanitize an email address.
+    """清理邮箱地址.
 
-    Args:
-        email: The email address to sanitize
+    参数：
+        email: 待清理的邮箱地址.
 
-    Returns:
-        str: The sanitized email address
+    返回：
+        str: 清理后的邮箱地址.
     """
-    # Basic sanitization
+    # 基础清理
     email = sanitize_string(email)
 
-    # Ensure email format (simple check)
+    # 确保邮箱格式正确（简单校验）
     if not re.match(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", email):
         raise ValueError("Invalid email format")
 
@@ -54,13 +54,13 @@ def sanitize_email(email: str) -> str:
 
 
 def sanitize_dict(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Recursively sanitize all string values in a dictionary.
+    """递归清理字典中的所有字符串值.
 
-    Args:
-        data: The dictionary to sanitize
+    参数：
+        data: 待清理的字典.
 
-    Returns:
-        Dict[str, Any]: The sanitized dictionary
+    返回：
+        Dict[str, Any]: 清理后的字典.
     """
     sanitized = {}
     for key, value in data.items():
@@ -76,13 +76,13 @@ def sanitize_dict(data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def sanitize_list(data: List[Any]) -> List[Any]:
-    """Recursively sanitize all string values in a list.
+    """递归清理列表中的所有字符串值.
 
-    Args:
-        data: The list to sanitize
+    参数：
+        data: 待清理的列表.
 
-    Returns:
-        List[Any]: The sanitized list
+    返回：
+        List[Any]: 清理后的列表.
     """
     sanitized = []
     for item in data:
@@ -98,16 +98,16 @@ def sanitize_list(data: List[Any]) -> List[Any]:
 
 
 def validate_password_strength(password: str) -> bool:
-    """Validate password strength.
+    """校验密码强度.
 
-    Args:
-        password: The password to validate
+    参数：
+        password: 待校验的密码.
 
-    Returns:
-        bool: Whether the password is strong enough
+    返回：
+        bool: 密码强度是否足够.
 
-    Raises:
-        ValueError: If the password is not strong enough with reason
+    异常：
+        ValueError: 密码强度不足时抛出，并说明具体原因.
     """
     if len(password) < 8:
         raise ValueError("Password must be at least 8 characters long")

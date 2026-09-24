@@ -1,4 +1,4 @@
-"""Observability module for the application."""
+"""应用可观测性模块."""
 
 from langfuse import Langfuse
 from langfuse.langchain import CallbackHandler
@@ -8,7 +8,7 @@ from app.core.logging import logger
 
 
 def langfuse_init():
-    """Initialize Langfuse."""
+    """初始化 Langfuse."""
     if not settings.LANGFUSE_TRACING_ENABLED:
         logger.debug("langfuse_tracing_disabled")
         return
@@ -32,10 +32,10 @@ def langfuse_init():
 
 
 def get_langfuse_callback_handler() -> CallbackHandler:
-    """Create a Langfuse CallbackHandler for tracking LLM interactions.
+    """创建用于跟踪 LLM 交互的 Langfuse CallbackHandler.
 
-    Returns:
-        CallbackHandler: Configured Langfuse callback handler.
+    返回：
+        CallbackHandler: 配置好的回调处理器.
     """
     return CallbackHandler()
 

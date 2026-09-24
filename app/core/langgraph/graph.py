@@ -1,4 +1,4 @@
-"""This file contains the LangGraph Agent/workflow and interactions with the LLM."""
+"""LangGraph Agent、工作流以及与 LLM 的交互逻辑."""
 
 import asyncio
 from typing import (
@@ -64,15 +64,14 @@ PostgresConnPool = AsyncConnectionPool[AsyncConnection[DictRow]]
 
 
 class LangGraphAgent:
-    """Manages the LangGraph Agent/workflow and interactions with the LLM.
+    """管理 LangGraph Agent、工作流以及与 LLM 的交互.
 
-    This class handles the creation and management of the LangGraph workflow,
-    including LLM interactions, database connections, and response processing.
+    该类负责创建和管理 LangGraph 工作流，包括 LLM 交互、数据库连接和响应处理.
     """
 
     def __init__(self):
-        """Initialize the LangGraph Agent with necessary components."""
-        # Use the LLM service with tools bound
+        """使用必要组件初始化 LangGraph Agent."""
+        # 使用已绑定工具的 LLM 服务
         self.llm_service = llm_service
         self.llm_service.bind_tools(tools)
         self.tools_by_name = {tool.name: tool for tool in tools}
@@ -85,17 +84,17 @@ class LangGraphAgent:
         )
 
     async def _get_connection_pool(self) -> PostgresConnPool:
-        """Get a PostgreSQL connection pool using environment-specific settings.
+        """使用环境级别配置获取 PostgreSQL 连接池.
 
-        Returns:
-            AsyncConnectionPool: The open connection pool.
+        返回：
+            AsyncConnectionPool: 已打开的连接池.
 
-        Raises:
-            Exception: If the pool cannot be created, in every environment.
+        异常：
+            Exception: 在任何环境下连接池创建失败时抛出.
         """
         if self._connection_pool is None:
             try:
-                # Configure pool size based on environment
+                # 根据环境配置连接池大小
                 max_size = settings.POSTGRES_POOL_SIZE
 
                 connection_url = (
@@ -121,23 +120,22 @@ class LangGraphAgent:
                 logger.exception(
                     "connection_pool_creation_failed", error=str(e), environment=settings.ENVIRONMENT.value
                 )
-                # Never degrade silently: the checkpointer is the only store for
-                # conversation history and HITL resume state. Serving without it
-                # loses data rather than surfacing an outage.
+                # 不能静默降级：检查点保存器是会话历史和 HITL 恢复状态的唯一存储.
+                # 缺少检查点保存器会导致数据丢失，而不是明确暴露服务故障.
                 raise e
         return self._connection_pool
 
     async def _chat(self, state: GraphState, config: RunnableConfig) -> Command:
-        """Process the chat state and generate a response.
+        """处理聊天状态并生成响应.
 
-        Args:
-            state (GraphState): The current state of the conversation.
-            config (RunnableConfig): The runnable configuration for this invocation.
+        参数：
+            state (GraphState): 当前会话状态.
+            config (RunnableConfig): 本次调用的可运行配置.
 
-        Returns:
-            Command: Command object with updated state and next node to execute.
+        返回：
+            Command: 包含更新状态和下一个待执行节点的命令对象.
         """
-        # Get the current LLM instance for metrics
+        # 获取当前 LLM 实例用于记录指标
         current_llm = self.llm_service.get_llm()
         model_name = (
             current_llm.model_name
@@ -149,15 +147,15 @@ class LangGraphAgent:
         thread_id = config.get("configurable", {}).get("thread_id")
         SYSTEM_PROMPT = load_system_prompt(username=username, long_term_memory=state.long_term_memory)
 
-        # Prepare messages with system prompt
+        # 使用系统提示词准备消息
         messages = prepare_messages(state.messages, SYSTEM_PROMPT)
 
         try:
-            # Use LLM service with automatic retries and circular fallback
+            # 使用带自动重试和循环回退能力的 LLM 服务
             with llm_inference_duration_seconds.labels(model=model_name).time():
                 response_message = await self.llm_service.call(dump_messages(messages))
 
-            # Process response to handle structured content blocks
+            # 处理响应，兼容结构化内容块
             response_message = process_llm_response(response_message)
 
             logger.info(
@@ -167,7 +165,7 @@ class LangGraphAgent:
                 environment=settings.ENVIRONMENT.value,
             )
 
-            # Determine next node based on whether there are tool calls
+            # 根据是否存在工具调用确定下一个节点
             if isinstance(response_message, AIMessage) and response_message.tool_calls:
                 goto = "tool_call"
             else:
@@ -183,15 +181,15 @@ class LangGraphAgent:
             )
             raise Exception(f"failed to get llm response after trying all models: {str(e)}")
 
-    # Define our tool node
+    # 定义工具节点
     async def _tool_call(self, state: GraphState) -> Command:
-        """Process tool calls from the last message.
+        """处理最后一条消息中的工具调用.
 
-        Args:
-            state: The current agent state containing messages and tool calls.
+        参数：
+            state: 包含消息和工具调用的当前 Agent 状态.
 
-        Returns:
-            Command: Command object with updated messages and routing back to chat.
+        返回：
+            Command: 包含更新消息并返回聊天节点路由的命令对象.
         """
         tool_calls = state.messages[-1].tool_calls
 
@@ -203,7 +201,7 @@ class LangGraphAgent:
                 tool_call_id=tool_call["id"],
             )
 
-        # Execute tool calls concurrently when multiple are requested
+        # 存在多个工具调用时并发执行
         if len(tool_calls) == 1:
             outputs = [await _execute_tool(tool_calls[0])]
         else:
@@ -212,13 +210,13 @@ class LangGraphAgent:
         return Command(update={"messages": outputs}, goto="chat")
 
     async def create_graph(self) -> CompiledStateGraph:
-        """Create and configure the LangGraph workflow.
+        """创建并配置 LangGraph 工作流.
 
-        Returns:
-            CompiledStateGraph: The configured LangGraph instance, always with a checkpointer.
+        返回：
+            CompiledStateGraph: 配置完成且始终带有检查点保存器的 LangGraph 实例.
 
-        Raises:
-            Exception: If the graph cannot be built, in every environment.
+        异常：
+            Exception: 在任何环境下图构建失败时抛出.
         """
         if self._graph is None:
             try:
@@ -233,7 +231,7 @@ class LangGraphAgent:
                 graph_builder.set_entry_point("chat")
                 graph_builder.set_finish_point("chat")
 
-                # Raises if the pool cannot be created — no checkpointer, no service.
+                # 连接池无法创建时抛出异常；没有检查点保存器就不提供服务.
                 connection_pool = await self._get_connection_pool()
                 checkpointer = AsyncPostgresSaver(connection_pool)
                 await checkpointer.setup()
@@ -255,11 +253,11 @@ class LangGraphAgent:
         return self._graph
 
     async def _get_graph(self) -> CompiledStateGraph:
-        """Return the compiled graph, creating it on first access.
+        """返回已编译的图，首次访问时创建.
 
-        Raises:
-            Exception: Propagated from ``create_graph()`` when initialisation
-                fails. Callers can rely on the return being non-``None``.
+        异常：
+            Exception: 初始化失败时传递 ``create_graph()`` 抛出的异常.
+                调用方可以确定返回值不会是 ``None``.
         """
         if self._graph is None:
             self._graph = await self.create_graph()
@@ -272,16 +270,16 @@ class LangGraphAgent:
         user_id: Optional[str] = None,
         username: Optional[str] = None,
     ) -> list[Message]:
-        """Get a response from the LLM.
+        """获取 LLM 响应.
 
-        Args:
-            messages (list[Message]): The messages to send to the LLM.
-            session_id (str): The session ID for the conversation.
-            user_id (Optional[str]): The user ID for the conversation.
-            username (Optional[str]): The display name of the user.
+        参数：
+            messages (list[Message]): 要发送给 LLM 的消息.
+            session_id (str): 会话 ID.
+            user_id (Optional[str]): 用户 ID.
+            username (Optional[str]): 用户显示名称.
 
-        Returns:
-            list[Message]: The response from the LLM.
+        返回：
+            list[Message]: LLM 响应.
         """
         graph = await self._get_graph()
         callbacks: list[BaseCallbackHandler] = [langfuse_callback_handler] if settings.LANGFUSE_TRACING_ENABLED else []
@@ -298,7 +296,7 @@ class LangGraphAgent:
         }
 
         try:
-            # Run state check and memory search concurrently to save 200-500ms
+            # 并发执行状态检查和记忆搜索，节省 200-500 毫秒
             state, relevant_memory = await asyncio.gather(
                 graph.aget_state(config),
                 memory_service.search(user_id, messages[-1].content),
@@ -317,7 +315,7 @@ class LangGraphAgent:
                     config=config,
                 )
 
-            # Check if the graph was interrupted during this invocation
+            # 检查本次调用期间图是否被中断
             state = await graph.aget_state(config)
             if state.next:
                 interrupt_value = state.tasks[0].interrupts[0].value if state.tasks else "Waiting for input."
@@ -343,16 +341,16 @@ class LangGraphAgent:
         user_id: Optional[str] = None,
         username: Optional[str] = None,
     ) -> AsyncGenerator[str, None]:
-        """Get a stream response from the LLM.
+        """获取 LLM 的流式响应.
 
-        Args:
-            messages (list[Message]): The messages to send to the LLM.
-            session_id (str): The session ID for the conversation.
-            user_id (Optional[str]): The user ID for the conversation.
-            username (Optional[str]): The display name of the user.
+        参数：
+            messages (list[Message]): 要发送给 LLM 的消息.
+            session_id (str): 会话 ID.
+            user_id (Optional[str]): 用户 ID.
+            username (Optional[str]): 用户显示名称.
 
-        Yields:
-            str: Tokens of the LLM response.
+        生成：
+            str: LLM 响应的令牌.
         """
         callbacks: list[BaseCallbackHandler] = [langfuse_callback_handler] if settings.LANGFUSE_TRACING_ENABLED else []
         config: RunnableConfig = {
@@ -369,7 +367,7 @@ class LangGraphAgent:
         graph = await self._get_graph()
 
         try:
-            # Run state check and memory search concurrently to save 200-500ms
+            # 并发执行状态检查和记忆搜索，节省 200-500 毫秒
             state, relevant_memory = await asyncio.gather(
                 graph.aget_state(config),
                 memory_service.search(user_id, messages[-1].content),
@@ -394,7 +392,7 @@ class LangGraphAgent:
                 if text:
                     yield text
 
-            # After streaming completes, check for interrupt or update memory
+            # 流式处理完成后检查中断状态或更新记忆
             state = await graph.aget_state(config)
             if state.next:
                 interrupt_value = state.tasks[0].interrupts[0].value if state.tasks else "Waiting for input."
@@ -413,13 +411,13 @@ class LangGraphAgent:
             raise stream_error
 
     async def get_chat_history(self, session_id: str) -> list[Message]:
-        """Get the chat history for a given thread ID.
+        """获取指定会话 ID 的聊天历史.
 
-        Args:
-            session_id (str): The session ID for the conversation.
+        参数：
+            session_id (str): 会话 ID.
 
-        Returns:
-            list[Message]: The chat history.
+        返回：
+            list[Message]: 聊天历史.
         """
         graph = await self._get_graph()
 
@@ -429,7 +427,7 @@ class LangGraphAgent:
 
     def __process_messages(self, messages: list[BaseMessage]) -> list[Message]:
         openai_style_messages = convert_to_openai_messages(messages)
-        # keep just assistant and user messages
+        # 仅保留 assistant 和 user 消息
         return [
             Message(role=message["role"], content=str(message["content"]))
             for message in openai_style_messages
@@ -437,21 +435,21 @@ class LangGraphAgent:
         ]
 
     async def clear_chat_history(self, session_id: str) -> None:
-        """Clear all chat history for a given thread ID.
+        """清空指定会话 ID 的全部聊天历史.
 
-        Args:
-            session_id: The ID of the session to clear history for.
+        参数：
+            session_id: 要清空历史的会话 ID.
 
-        Raises:
-            Exception: If there's an error clearing the chat history.
+        异常：
+            Exception: 清空聊天历史时发生错误.
         """
         try:
-            # Make sure the pool is initialized in the current event loop
+            # 确保连接池已在当前事件循环中初始化
             conn_pool = await self._get_connection_pool()
             if conn_pool is None:
                 raise RuntimeError("connection pool unavailable; cannot clear chat history")
 
-            # Batch all DELETEs in a single pipeline round-trip
+            # 在一次 pipeline 往返中批量执行所有 DELETE 操作
             async with conn_pool.connection() as conn:
                 async with conn.pipeline():
                     for table in settings.CHECKPOINT_TABLES:

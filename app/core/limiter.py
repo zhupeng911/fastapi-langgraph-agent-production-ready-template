@@ -1,11 +1,8 @@
-"""Rate limiting configuration for the application.
+"""应用限流配置.
 
-This module configures rate limiting using slowapi, with default limits
-defined in the application settings. Rate limits are applied based on
-remote IP addresses.
+本模块使用 slowapi 配置限流，默认限制由应用配置提供，并根据客户端远程 IP 地址进行限流.
 
-When Valkey is configured, uses it as a distributed storage backend
-so rate limits work correctly across multiple app instances.
+配置 Valkey 后将使用 Valkey 作为分布式存储后端，确保多应用实例之间的限流状态一致.
 """
 
 from slowapi import Limiter
@@ -15,9 +12,8 @@ from app.core.cache import REDIS_AVAILABLE
 from app.core.config import settings
 from app.core.logging import logger
 
-# Build storage URI for Valkey if configured. redis is an optional dependency
-# (the `cache` extra), so fall back to in-memory storage when it is missing
-# rather than letting limits raise ConfigurationError at import time.
+# 如果配置了 Valkey，则构建存储 URI.redis 是可选依赖（cache 扩展），缺少时回退到内存存储，
+# 避免在模块导入阶段因限流配置抛出 ConfigurationError.
 _storage_uri = None
 if settings.VALKEY_HOST and REDIS_AVAILABLE:
     _password_part = f":{settings.VALKEY_PASSWORD}@" if settings.VALKEY_PASSWORD else ""
@@ -29,7 +25,7 @@ elif settings.VALKEY_HOST:
         hint="install with: uv add redis --optional cache",
     )
 
-# Initialize rate limiter (uses in-memory storage if no Valkey)
+# 初始化限流器；未配置 Valkey 时使用内存存储
 limiter = Limiter(
     key_func=get_remote_address,
     default_limits=settings.RATE_LIMIT_DEFAULT,  # pyright: ignore[reportArgumentType]

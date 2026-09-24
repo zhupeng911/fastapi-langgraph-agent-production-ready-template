@@ -1,4 +1,4 @@
-"""This file contains the schemas for the application."""
+"""应用数据 Schema."""
 
 from app.schemas.auth import Token
 from app.schemas.base import BaseResponse

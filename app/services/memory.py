@@ -1,4 +1,4 @@
-"""Long-term memory service using mem0 and pgvector with optional cache layer."""
+"""使用 mem0 和 pgvector，并支持可选缓存层的长期记忆服务."""
 
 from mem0 import AsyncMemory
 
@@ -11,10 +11,10 @@ from app.core.logging import logger
 
 
 class MemoryService:
-    """Service for managing long-term memory using mem0 and pgvector."""
+    """使用 mem0 和 pgvector 管理长期记忆的服务."""
 
     def __init__(self):
-        """Initialize the memory service."""
+        """初始化记忆服务."""
         self._memory: AsyncMemory | None = None
 
     async def _get_memory(self) -> AsyncMemory:
@@ -45,27 +45,26 @@ class MemoryService:
         return self._memory
 
     async def initialize(self) -> None:
-        """Pre-warm the mem0 AsyncMemory instance and its pgvector connection pool.
+        """预热 mem0 AsyncMemory 实例及其 pgvector 连接池.
 
-        Call once at startup so the first search() or add() doesn't pay the
-        ~130ms from_config + pgvector.list_cols() cold-init cost.
+        在应用启动时调用一次，避免首次 search() 或 add() 承担 from_config 和
+        pgvector.list_cols() 初始化产生的约 130 毫秒冷启动开销.
         """
         await self._get_memory()
         logger.info("memory_service_initialized")
 
     async def search(self, user_id: str | None, query: str) -> str:
-        """Search relevant memories for a user.
+        """搜索用户相关的记忆.
 
-        Checks cache first; on miss, queries mem0 and caches the result.
+        先检查缓存；缓存未命中时查询 mem0 并缓存结果.
 
-        Returns formatted memory string, or empty string on failure or when
-        no user_id is supplied (anonymous sessions skip long-term memory
-        rather than pooling under a shared partition).
+        查询成功时返回格式化的记忆字符串；失败或未提供 user_id 时返回空字符串.
+        匿名会话会跳过长期记忆，避免共享同一个用户分区.
         """
         if user_id is None:
             return ""
         try:
-            # Check cache first
+            # 优先检查缓存
             key = cache_key("memory", str(user_id), query)
             cached = await cache_service.get(key)
             if cached is not None:
@@ -76,7 +75,7 @@ class MemoryService:
             results = await memory.search(user_id=str(user_id), query=query)
             result = "\n".join([f"* {r['memory']}" for r in results["results"]])
 
-            # Cache successful results
+            # 仅缓存成功结果
             if result:
                 await cache_service.set(key, result)
 
@@ -86,9 +85,9 @@ class MemoryService:
             return ""
 
     async def add(self, user_id: str | None, messages: list[dict], metadata: dict | None = None) -> None:
-        """Add messages to long-term memory for a user.
+        """将消息添加到用户的长期记忆.
 
-        No-op when ``user_id`` is ``None`` (see ``search`` for rationale).
+        当 ``user_id`` 为 ``None`` 时不执行任何操作，原因参见 ``search``.
         """
         if user_id is None:
             return

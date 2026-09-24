@@ -1,4 +1,4 @@
-"""This file contains the authentication utilities for the application."""
+"""应用认证工具."""
 
 import re
 from datetime import (
@@ -20,14 +20,14 @@ from app.utils.sanitization import sanitize_string
 
 
 def create_access_token(thread_id: str, expires_delta: Optional[timedelta] = None) -> Token:
-    """Create a new access token for a thread.
+    """为线程创建新的访问令牌.
 
-    Args:
-        thread_id: The unique thread ID for the conversation.
-        expires_delta: Optional expiration time delta.
+    参数：
+        thread_id: 会话的唯一线程 ID.
+        expires_delta: 可选的过期时间间隔.
 
-    Returns:
-        Token: The generated access token.
+    返回：
+        Token: 生成的访问令牌.
     """
     if expires_delta:
         expire = datetime.now(UTC) + expires_delta
@@ -38,7 +38,7 @@ def create_access_token(thread_id: str, expires_delta: Optional[timedelta] = Non
         "sub": thread_id,
         "exp": expire,
         "iat": datetime.now(UTC),
-        "jti": sanitize_string(f"{thread_id}-{datetime.now(UTC).timestamp()}"),  # Add unique token identifier
+        "jti": sanitize_string(f"{thread_id}-{datetime.now(UTC).timestamp()}"),  # 添加唯一令牌标识
     }
 
     encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
@@ -49,23 +49,23 @@ def create_access_token(thread_id: str, expires_delta: Optional[timedelta] = Non
 
 
 def verify_token(token: str) -> Optional[str]:
-    """Verify a JWT token and return the thread ID.
+    """校验 JWT 令牌并返回线程 ID.
 
-    Args:
-        token: The JWT token to verify.
+    参数：
+        token: 待校验的 JWT 令牌.
 
-    Returns:
-        Optional[str]: The thread ID if token is valid, None otherwise.
+    返回：
+        Optional[str]: 令牌有效时返回线程 ID，否则返回 None.
 
-    Raises:
-        ValueError: If the token format is invalid
+    异常：
+        ValueError: 令牌格式无效时抛出.
     """
     if not token or not isinstance(token, str):
         logger.warning("token_invalid_format")
         raise ValueError("Token must be a non-empty string")
 
-    # Basic format validation before attempting decode
-    # JWT tokens consist of 3 base64url-encoded segments separated by dots
+    # 解码前先进行基本格式校验
+    # JWT 令牌由三个使用点号分隔的 base64url 编码片段组成
     if not re.match(r"^[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+$", token):
         logger.warning("token_suspicious_format")
         raise ValueError("Token format is invalid - expected JWT format")

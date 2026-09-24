@@ -1,4 +1,4 @@
-"""LLM model registry with pre-initialized instances."""
+"""预初始化 LLM 实例的模型注册表."""
 
 from typing import (
     Any,
@@ -16,20 +16,18 @@ from app.core.logging import logger
 
 _API_KEY = SecretStr(settings.OPENAI_API_KEY)
 
-# Every model here is a reasoning model, and the API rejects the classic sampling
-# knobs (`top_p`, `presence_penalty`, `frequency_penalty`) with a 400 once
-# `reasoning` is set. Tune quality with `reasoning.effort` instead.
+# 此处的模型均为推理模型.设置 `reasoning` 后，API 会因使用传统采样参数
+# （`top_p`、`presence_penalty`、`frequency_penalty`）返回 400，应改用 `reasoning.effort` 调整质量.
 
 
 class LLMRegistry:
-    """Registry of available LLM models with pre-initialized instances.
+    """包含预初始化实例的可用 LLM 模型注册表.
 
-    This class maintains a list of LLM configurations and provides
-    methods to retrieve them by name with optional argument overrides.
+    该类维护 LLM 配置列表，并提供按名称获取模型及覆盖可选参数的方法.
     """
 
-    # Ordered by preference: index 0 is the default and the head of the circular
-    # fallback chain, so it degrades newest -> cheapest.
+    # 按偏好排序：索引 0 是默认模型，也是循环回退链的起点，
+    # 因此回退顺序为最新模型到成本最低模型.
     LLMS: List[Dict[str, Any]] = [
         {
             "name": "gpt-5.6-luna",
@@ -71,20 +69,19 @@ class LLMRegistry:
 
     @classmethod
     def get(cls, model_name: str, **kwargs) -> BaseChatModel:
-        """Get an LLM by name with optional argument overrides.
+        """按名称获取 LLM，并支持覆盖可选参数.
 
-        When kwargs are provided a fresh ChatOpenAI instance is returned with
-        those overrides applied, leaving the shared registry entry untouched.
+        提供 kwargs 时会返回应用这些覆盖参数的新 ChatOpenAI 实例，不修改注册表中的共享实例.
 
-        Args:
-            model_name: Name of the model to retrieve.
-            **kwargs: Optional arguments to override default model configuration.
+        参数：
+            model_name: 要获取的模型名称.
+            **kwargs: 用于覆盖默认模型配置的可选参数.
 
-        Returns:
-            BaseChatModel instance.
+        返回：
+            BaseChatModel 实例.
 
-        Raises:
-            ValueError: If model_name is not found in LLMS.
+        异常：
+            ValueError: model_name 不存在于 LLMS 时抛出.
         """
         model_entry = next((e for e in cls.LLMS if e["name"] == model_name), None)
 
@@ -93,9 +90,8 @@ class LLMRegistry:
             raise ValueError(f"model '{model_name}' not found in registry. available models: {available}")
 
         if kwargs:
-            # Take the model id from the entry rather than reusing the registry
-            # name, so a name that ever diverges from its model can't send an
-            # unknown id to the API.
+            # 使用注册项中的模型 ID，而不是直接复用注册表名称，
+            # 避免名称与模型不一致时向 API 发送未知 ID.
             base_llm = cast(ChatOpenAI, model_entry["llm"])
             logger.debug(
                 "creating_llm_with_custom_args",
@@ -103,8 +99,8 @@ class LLMRegistry:
                 model=base_llm.model_name,
                 custom_args=list(kwargs.keys()),
             )
-            # ponytail: carries the token limit but not per-entry `reasoning`;
-            # add that here if a caller ever needs to override a reasoning model.
+            # 注意：这里保留令牌限制，但不携带每个注册项的 `reasoning`；
+            # 如果调用方需要覆盖推理模型，应在此处补充该配置.
             return ChatOpenAI(
                 model=base_llm.model_name,
                 api_key=_API_KEY,
@@ -117,22 +113,22 @@ class LLMRegistry:
 
     @classmethod
     def get_all_names(cls) -> List[str]:
-        """Return all registered model names in order.
+        """按注册顺序返回全部模型名称.
 
-        Returns:
-            List of model name strings.
+        返回：
+            List[str]: 模型名称列表.
         """
         return [e["name"] for e in cls.LLMS]
 
     @classmethod
     def get_model_at_index(cls, index: int) -> Dict[str, Any]:
-        """Return the model entry at a specific index, wrapping to 0 if out of range.
+        """返回指定索引处的模型注册项，索引越界时回到索引 0.
 
-        Args:
-            index: Index into LLMS.
+        参数：
+            index: LLMS 中的索引.
 
-        Returns:
-            Model entry dict.
+        返回：
+            模型注册项字典.
         """
         if 0 <= index < len(cls.LLMS):
             return cls.LLMS[index]

@@ -1,4 +1,4 @@
-"""This file contains the services for the application."""
+"""应用服务模块."""
 
 from app.services.database import database_service
 from app.services.llm import (
